@@ -185,7 +185,7 @@ func (db *DrandBeacon) VerifyEntry(curr types.BeaconEntry, prev types.BeaconEntr
 		Round:       curr.Round,
 		Signature:   curr.Data,
 	}
-	log.Infow("VerifyBeacon", "dchain.PreviousSig", b.PreviousSig, "dchain.round", b.Round, "dchain.Signature", b.Signature)
+	log.Infow("VerifyBeacon", "bPreviousSig", b.PreviousSig, "b.round", b.Round, "b.Signature", b.Signature, "db.pubkey", db.pubkey.String())
 	err := dchain.VerifyBeacon(db.pubkey, b)
 	if err == nil {
 		db.cacheValue(curr)
