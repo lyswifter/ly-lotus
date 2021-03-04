@@ -1,5 +1,6 @@
 // +build !debug
 // +build !2k
+// +build !pri
 // +build !testground
 // +build !calibnet
 // +build !nerpanet

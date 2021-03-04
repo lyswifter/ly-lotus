@@ -15,6 +15,7 @@ const (
 	Build2k       = 0x2
 	BuildDebug    = 0x3
 	BuildCalibnet = 0x4
+	BuildPri      = 0x5
 )
 
 func buildType() string {
@@ -29,6 +30,8 @@ func buildType() string {
 		return "+debug"
 	case BuildCalibnet:
 		return "+calibnet"
+	case BuildPri:
+		return "+pri"
 	default:
 		return "+huh?"
 	}

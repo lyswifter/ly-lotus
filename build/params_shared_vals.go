@@ -29,14 +29,14 @@ const NewestNetworkVersion = network.Version9
 const ActorUpgradeNetworkVersion = network.Version4
 
 // Epochs
-const ForkLengthThreshold = Finality
+var ForkLengthThreshold = Finality
 
 // Blocks (e)
 var BlocksPerEpoch = uint64(builtin2.ExpectedLeadersPerEpoch)
 
 // Epochs
-const Finality = policy.ChainFinality
-const MessageConfidence = uint64(5)
+var Finality = policy.ChainFinality
+var MessageConfidence = uint64(5)
 
 // constants for Weight calculation
 // The ratio of weight contributed by short-term vs long-term factors in a given round
@@ -48,7 +48,7 @@ const WRatioDen = uint64(2)
 
 // Epochs
 // TODO: unused
-const SealRandomnessLookback = policy.SealRandomnessLookback
+var SealRandomnessLookback = policy.SealRandomnessLookback
 
 // /////
 // Mining

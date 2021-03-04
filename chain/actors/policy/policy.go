@@ -24,7 +24,7 @@ import (
 	verifreg3 "github.com/filecoin-project/specs-actors/v3/actors/builtin/verifreg"
 )
 
-const (
+var (
 	ChainFinality          = miner3.ChainFinality
 	SealRandomnessLookback = ChainFinality
 	PaychSettleDelay       = paych3.SettleDelay
@@ -190,4 +190,8 @@ func GetDefaultSectorSize() abi.SectorSize {
 	})
 
 	return szs[0]
+}
+
+func SetChainFinality(chainFinality abi.ChainEpoch) {
+	ChainFinality = chainFinality
 }

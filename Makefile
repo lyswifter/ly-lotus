@@ -72,6 +72,9 @@ debug: lotus lotus-miner lotus-worker lotus-seed
 calibnet: GOFLAGS+=-tags=calibnet
 calibnet: lotus lotus-miner lotus-worker lotus-seed
 
+pri: GOFLAGS+=-tags=pri
+pri: lotus
+
 nerpanet: GOFLAGS+=-tags=nerpanet
 nerpanet: lotus lotus-miner lotus-worker lotus-seed
 
