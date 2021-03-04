@@ -190,7 +190,9 @@ func (db *DrandBeacon) VerifyEntry(curr types.BeaconEntry, prev types.BeaconEntr
 		db.cacheValue(curr)
 	}
 
-	log.Infow("VerifyBeacon", "error", err, "pubkey", db, "giving", "868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31")
+	pb, _ := db.pubkey.Data()
+
+	log.Infow("VerifyBeacon", "error", err, "pubkey", pb, "giving", "868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31")
 	return err
 }
 
