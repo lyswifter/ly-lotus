@@ -83,6 +83,7 @@ func ValidateBlockValues(bSchedule Schedule, h *types.BlockHeader, parentEpoch a
 	}
 
 	for i, e := range h.BeaconEntries {
+		log.Infow("VerifyEntry", "e", e, "prevEntry", prevEntry)
 		if err := b.VerifyEntry(e, prevEntry); err != nil {
 			return xerrors.Errorf("beacon entry %d (%d - %x (%d)) was invalid: %w", i, e.Round, e.Data, len(e.Data), err)
 		}
