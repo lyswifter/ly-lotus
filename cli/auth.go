@@ -9,19 +9,20 @@ import (
 	"github.com/filecoin-project/go-jsonrpc/auth"
 
 	"github.com/filecoin-project/lotus/api/apistruct"
+	cliutil "github.com/filecoin-project/lotus/cli/util"
 	"github.com/filecoin-project/lotus/node/repo"
 )
 
-var authCmd = &cli.Command{
+var AuthCmd = &cli.Command{
 	Name:  "auth",
 	Usage: "Manage RPC permissions",
 	Subcommands: []*cli.Command{
-		authCreateAdminToken,
-		authApiInfoToken,
+		AuthCreateAdminToken,
+		AuthApiInfoToken,
 	},
 }
 
-var authCreateAdminToken = &cli.Command{
+var AuthCreateAdminToken = &cli.Command{
 	Name:  "create-token",
 	Usage: "Create token",
 	Flags: []cli.Flag{
@@ -69,7 +70,7 @@ var authCreateAdminToken = &cli.Command{
 	},
 }
 
-var authApiInfoToken = &cli.Command{
+var AuthApiInfoToken = &cli.Command{
 	Name:  "api-info",
 	Usage: "Get token with API info required to connect to this node",
 	Flags: []cli.Flag{
@@ -89,7 +90,7 @@ var authApiInfoToken = &cli.Command{
 		ctx := ReqContext(cctx)
 
 		if !cctx.IsSet("perm") {
-			return xerrors.New("--perm flag not set")
+			return xerrors.New("--perm flag not set, use with one of: read, write, sign, admin")
 		}
 
 		perm := cctx.String("perm")
@@ -127,7 +128,7 @@ var authApiInfoToken = &cli.Command{
 
 		// TODO: Log in audit log when it is implemented
 
-		fmt.Printf("%s=%s:%s\n", envForRepo(t), string(token), ainfo.Addr)
+		fmt.Printf("%s=%s:%s\n", cliutil.EnvForRepo(t), string(token), ainfo.Addr)
 		return nil
 	},
 }

@@ -16,6 +16,7 @@ func main() {
 	logging.SetLogLevel("*", "INFO")
 
 	local := []*cli.Command{
+		base64Cmd,
 		base32Cmd,
 		base16Cmd,
 		bitFieldCmd,
@@ -37,10 +38,11 @@ func main() {
 		mpoolCmd,
 		genesisVerifyCmd,
 		mathCmd,
+		minerCmd,
 		mpoolStatsCmd,
 		exportChainCmd,
 		consensusCmd,
-		rollupDealStatsCmd,
+		storageStatsCmd,
 		syncCmd,
 		stateTreePruneCmd,
 		datastoreCmd,
@@ -51,6 +53,7 @@ func main() {
 		rpcCmd,
 		cidCmd,
 		blockmsgidCmd,
+		signaturesCmd,
 	}
 
 	app := &cli.App{

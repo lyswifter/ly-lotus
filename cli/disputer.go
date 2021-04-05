@@ -35,7 +35,7 @@ type minerDeadline struct {
 	index uint64
 }
 
-var chainDisputeSetCmd = &cli.Command{
+var ChainDisputeSetCmd = &cli.Command{
 	Name:  "disputer",
 	Usage: "interact with the window post disputer",
 	Flags: []cli.Flag{
@@ -270,7 +270,7 @@ var disputerStartCmd = &cli.Command{
 				if err != nil {
 					disputeLog.Errorw("failed to dispute post message", "err", err.Error(), "miner", dpmsg.To)
 				} else {
-					disputeLog.Infof("submited dispute", "mcid", m.Cid(), "miner", dpmsg.To)
+					disputeLog.Infow("submited dispute", "mcid", m.Cid(), "miner", dpmsg.To)
 				}
 			}
 
