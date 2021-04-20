@@ -362,6 +362,7 @@ func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEp
 		pstate = newState
 	}
 
+	msgStart := build.Clock.Now()
 	var receipts []cbg.CBORMarshaler
 	processedMsgs := make(map[cid.Cid]struct{})
 	for _, b := range bms {
@@ -425,6 +426,8 @@ func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEp
 			return cid.Undef, cid.Undef, xerrors.Errorf("reward application message failed (exit %d): %s", ret.ExitCode, ret.ActorErr)
 		}
 	}
+
+	log.Infow("applyMes", "took", build.Clock.Since(msgStart).String())
 
 	if err := runCron(epoch); err != nil {
 		return cid.Cid{}, cid.Cid{}, err

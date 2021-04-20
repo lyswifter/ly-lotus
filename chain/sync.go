@@ -751,9 +751,11 @@ func (syncer *Syncer) ValidateBlock(ctx context.Context, b *types.FullBlock, use
 	}
 
 	msgsCheck := async.Err(func() error {
+		log.Info("checkBlockMessages: start")
 		if err := syncer.checkBlockMessages(ctx, b, baseTs); err != nil {
 			return xerrors.Errorf("block had invalid messages: %w", err)
 		}
+		log.Info("checkBlockMessages: finished")
 		return nil
 	})
 
