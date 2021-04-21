@@ -280,6 +280,7 @@ func (sm *StateManager) ExecutionTrace(ctx context.Context, ts *types.TipSet) (c
 type ExecCallback func(cid.Cid, *types.Message, *vm.ApplyRet) error
 
 func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEpoch, pstate cid.Cid, bms []store.BlockMessages, epoch abi.ChainEpoch, r vm.Rand, cb ExecCallback, baseFee abi.TokenAmount, ts *types.TipSet) (cid.Cid, cid.Cid, error) {
+	totalStart := build.Clock.Now()
 
 	makeVmWithBaseState := func(base cid.Cid) (*vm.VM, error) {
 		vmopt := &vm.VMOpts{
@@ -426,12 +427,13 @@ func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEp
 			return cid.Undef, cid.Undef, xerrors.Errorf("reward application message failed (exit %d): %s", ret.ExitCode, ret.ActorErr)
 		}
 	}
+	msgTook := build.Clock.Since(msgStart).String()
 
-	log.Infow("applyMes", "took", build.Clock.Since(msgStart).String())
-
+	cronStart := build.Clock.Now()
 	if err := runCron(epoch); err != nil {
 		return cid.Cid{}, cid.Cid{}, err
 	}
+	cronTook := build.Clock.Since(cronStart).String()
 
 	rectarr := blockadt.MakeEmptyArray(sm.cs.ActorStore(ctx))
 	for i, receipt := range receipts {
@@ -444,11 +446,14 @@ func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEp
 		return cid.Undef, cid.Undef, xerrors.Errorf("failed to build receipts amt: %w", err)
 	}
 
+	flushStart := build.Clock.Now()
 	st, err := vmi.Flush(ctx)
 	if err != nil {
 		return cid.Undef, cid.Undef, xerrors.Errorf("vm flush failed: %w", err)
 	}
+	flushTook := build.Clock.Since(flushStart).String()
 
+	log.Infow("applyMsg", "ts.height", ts.Height(), "msgTook", msgTook, "cronTook", cronTook, "flushTook", flushTook, "total", build.Clock.Since(totalStart).String())
 	return st, rectroot, nil
 }
 
@@ -489,9 +494,10 @@ func (sm *StateManager) computeTipSetState(ctx context.Context, ts *types.TipSet
 	baseFee := blks[0].ParentBaseFee
 
 	applyBlocksStart := build.Clock.Now()
+	log.Infof("ApplyBlocks: start height: %d", blks[0].Height)
 	stcid, reccid, err := sm.ApplyBlocks(ctx, parentEpoch, pstate, blkmsgs, blks[0].Height, r, cb, baseFee, ts)
 	if err == nil {
-		log.Infow("ApplyBlocks", "parentEpoch", parentEpoch, "blkmsgs", len(blkmsgs), "stcid", stcid, "reccid", reccid, "took", build.Clock.Since(applyBlocksStart).String())
+		log.Infow("ApplyBlocks: finished", "epoch", blks[0].Height, "blkmsgs", len(blkmsgs), "took", build.Clock.Since(applyBlocksStart).String())
 	}
 
 	return stcid, reccid, err
