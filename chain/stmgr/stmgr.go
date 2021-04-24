@@ -5,11 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
 	cbg "github.com/whyrusleeping/cbor-gen"
+	"go.opencensus.io/stats"
 	"go.opencensus.io/trace"
 	"golang.org/x/xerrors"
 
@@ -43,9 +45,10 @@ import (
 	"github.com/filecoin-project/lotus/chain/store"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/filecoin-project/lotus/chain/vm"
+	"github.com/filecoin-project/lotus/metrics"
 )
 
-const LookbackNoLimit = abi.ChainEpoch(-1)
+const LookbackNoLimit = api.LookbackNoLimit
 const ReceiptAmtBitwidth = 3
 
 var log = logging.Logger("statemgr")
@@ -282,6 +285,14 @@ type ExecCallback func(cid.Cid, *types.Message, *vm.ApplyRet) error
 func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEpoch, pstate cid.Cid, bms []store.BlockMessages, epoch abi.ChainEpoch, r vm.Rand, cb ExecCallback, baseFee abi.TokenAmount, ts *types.TipSet) (cid.Cid, cid.Cid, error) {
 	totalStart := build.Clock.Now()
 
+	done := metrics.Timer(ctx, metrics.VMApplyBlocksTotal)
+	defer done()
+
+	partDone := metrics.Timer(ctx, metrics.VMApplyEarly)
+	defer func() {
+		partDone()
+	}()
+
 	makeVmWithBaseState := func(base cid.Cid) (*vm.VM, error) {
 		vmopt := &vm.VMOpts{
 			StateBase:      base,
@@ -304,7 +315,6 @@ func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEp
 	}
 
 	runCron := func(epoch abi.ChainEpoch) error {
-
 		cronMsg := &types.Message{
 			To:         cron.Address,
 			From:       builtin.SystemActorAddr,
@@ -363,7 +373,11 @@ func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEp
 		pstate = newState
 	}
 
+	partDone()
+	partDone = metrics.Timer(ctx, metrics.VMApplyMessages)
+
 	msgStart := build.Clock.Now()
+
 	var receipts []cbg.CBORMarshaler
 	processedMsgs := make(map[cid.Cid]struct{})
 	for _, b := range bms {
@@ -429,11 +443,18 @@ func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEp
 	}
 	msgTook := build.Clock.Since(msgStart).String()
 
+	partDone()
+	partDone = metrics.Timer(ctx, metrics.VMApplyCron)
+
 	cronStart := build.Clock.Now()
+
 	if err := runCron(epoch); err != nil {
 		return cid.Cid{}, cid.Cid{}, err
 	}
 	cronTook := build.Clock.Since(cronStart).String()
+
+	partDone()
+	partDone = metrics.Timer(ctx, metrics.VMApplyFlush)
 
 	rectarr := blockadt.MakeEmptyArray(sm.cs.ActorStore(ctx))
 	for i, receipt := range receipts {
@@ -454,6 +475,10 @@ func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEp
 	flushTook := build.Clock.Since(flushStart).String()
 
 	log.Infow("applyMsg", "ts.height", ts.Height(), "msgTook", msgTook, "cronTook", cronTook, "flushTook", flushTook, "total", build.Clock.Since(totalStart).String())
+
+	stats.Record(ctx, metrics.VMSends.M(int64(atomic.LoadUint64(&vm.StatSends))),
+		metrics.VMApplied.M(int64(atomic.LoadUint64(&vm.StatApplied))))
+
 	return st, rectroot, nil
 }
 
@@ -579,24 +604,10 @@ func (sm *StateManager) LookupID(ctx context.Context, addr address.Address, ts *
 	return state.LookupID(addr)
 }
 
-func (sm *StateManager) GetReceipt(ctx context.Context, msg cid.Cid, ts *types.TipSet) (*types.MessageReceipt, error) {
-	m, err := sm.cs.GetCMessage(msg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load message: %w", err)
-	}
-
-	_, r, _, err := sm.searchBackForMsg(ctx, ts, m, LookbackNoLimit)
-	if err != nil {
-		return nil, fmt.Errorf("failed to look back through chain for message: %w", err)
-	}
-
-	return r, nil
-}
-
 // WaitForMessage blocks until a message appears on chain. It looks backwards in the chain to see if this has already
 // happened, with an optional limit to how many epochs it will search. It guarantees that the message has been on
 // chain for at least confidence epochs without being reverted before returning.
-func (sm *StateManager) WaitForMessage(ctx context.Context, mcid cid.Cid, confidence uint64, lookbackLimit abi.ChainEpoch) (*types.TipSet, *types.MessageReceipt, cid.Cid, error) {
+func (sm *StateManager) WaitForMessage(ctx context.Context, mcid cid.Cid, confidence uint64, lookbackLimit abi.ChainEpoch, allowReplaced bool) (*types.TipSet, *types.MessageReceipt, cid.Cid, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -620,7 +631,7 @@ func (sm *StateManager) WaitForMessage(ctx context.Context, mcid cid.Cid, confid
 		return nil, nil, cid.Undef, fmt.Errorf("expected current head on SHC stream (got %s)", head[0].Type)
 	}
 
-	r, foundMsg, err := sm.tipsetExecutedMessage(head[0].Val, mcid, msg.VMMessage())
+	r, foundMsg, err := sm.tipsetExecutedMessage(head[0].Val, mcid, msg.VMMessage(), allowReplaced)
 	if err != nil {
 		return nil, nil, cid.Undef, err
 	}
@@ -634,7 +645,7 @@ func (sm *StateManager) WaitForMessage(ctx context.Context, mcid cid.Cid, confid
 	var backFm cid.Cid
 	backSearchWait := make(chan struct{})
 	go func() {
-		fts, r, foundMsg, err := sm.searchBackForMsg(ctx, head[0].Val, msg, lookbackLimit)
+		fts, r, foundMsg, err := sm.searchBackForMsg(ctx, head[0].Val, msg, lookbackLimit, allowReplaced)
 		if err != nil {
 			log.Warnf("failed to look back through chain for message: %v", err)
 			return
@@ -673,7 +684,7 @@ func (sm *StateManager) WaitForMessage(ctx context.Context, mcid cid.Cid, confid
 					if candidateTs != nil && val.Val.Height() >= candidateTs.Height()+abi.ChainEpoch(confidence) {
 						return candidateTs, candidateRcp, candidateFm, nil
 					}
-					r, foundMsg, err := sm.tipsetExecutedMessage(val.Val, mcid, msg.VMMessage())
+					r, foundMsg, err := sm.tipsetExecutedMessage(val.Val, mcid, msg.VMMessage(), allowReplaced)
 					if err != nil {
 						return nil, nil, cid.Undef, err
 					}
@@ -709,15 +720,13 @@ func (sm *StateManager) WaitForMessage(ctx context.Context, mcid cid.Cid, confid
 	}
 }
 
-func (sm *StateManager) SearchForMessage(ctx context.Context, mcid cid.Cid, lookbackLimit abi.ChainEpoch) (*types.TipSet, *types.MessageReceipt, cid.Cid, error) {
+func (sm *StateManager) SearchForMessage(ctx context.Context, head *types.TipSet, mcid cid.Cid, lookbackLimit abi.ChainEpoch, allowReplaced bool) (*types.TipSet, *types.MessageReceipt, cid.Cid, error) {
 	msg, err := sm.cs.GetCMessage(mcid)
 	if err != nil {
 		return nil, nil, cid.Undef, fmt.Errorf("failed to load message: %w", err)
 	}
 
-	head := sm.cs.GetHeaviestTipSet()
-
-	r, foundMsg, err := sm.tipsetExecutedMessage(head, mcid, msg.VMMessage())
+	r, foundMsg, err := sm.tipsetExecutedMessage(head, mcid, msg.VMMessage(), allowReplaced)
 	if err != nil {
 		return nil, nil, cid.Undef, err
 	}
@@ -726,7 +735,7 @@ func (sm *StateManager) SearchForMessage(ctx context.Context, mcid cid.Cid, look
 		return head, r, foundMsg, nil
 	}
 
-	fts, r, foundMsg, err := sm.searchBackForMsg(ctx, head, msg, lookbackLimit)
+	fts, r, foundMsg, err := sm.searchBackForMsg(ctx, head, msg, lookbackLimit, allowReplaced)
 
 	if err != nil {
 		log.Warnf("failed to look back through chain for message %s", mcid)
@@ -746,7 +755,7 @@ func (sm *StateManager) SearchForMessage(ctx context.Context, mcid cid.Cid, look
 // - 0 then no tipsets are searched
 // - 5 then five tipset are searched
 // - LookbackNoLimit then there is no limit
-func (sm *StateManager) searchBackForMsg(ctx context.Context, from *types.TipSet, m types.ChainMsg, limit abi.ChainEpoch) (*types.TipSet, *types.MessageReceipt, cid.Cid, error) {
+func (sm *StateManager) searchBackForMsg(ctx context.Context, from *types.TipSet, m types.ChainMsg, limit abi.ChainEpoch, allowReplaced bool) (*types.TipSet, *types.MessageReceipt, cid.Cid, error) {
 	limitHeight := from.Height() - limit
 	noLimit := limit == LookbackNoLimit
 
@@ -796,7 +805,7 @@ func (sm *StateManager) searchBackForMsg(ctx context.Context, from *types.TipSet
 
 		// check that between cur and parent tipset the nonce fell into range of our message
 		if actorNoExist || (curActor.Nonce > mNonce && act.Nonce <= mNonce) {
-			r, foundMsg, err := sm.tipsetExecutedMessage(cur, m.Cid(), m.VMMessage())
+			r, foundMsg, err := sm.tipsetExecutedMessage(cur, m.Cid(), m.VMMessage(), allowReplaced)
 			if err != nil {
 				return nil, nil, cid.Undef, xerrors.Errorf("checking for message execution during lookback: %w", err)
 			}
@@ -811,7 +820,7 @@ func (sm *StateManager) searchBackForMsg(ctx context.Context, from *types.TipSet
 	}
 }
 
-func (sm *StateManager) tipsetExecutedMessage(ts *types.TipSet, msg cid.Cid, vmm *types.Message) (*types.MessageReceipt, cid.Cid, error) {
+func (sm *StateManager) tipsetExecutedMessage(ts *types.TipSet, msg cid.Cid, vmm *types.Message, allowReplaced bool) (*types.MessageReceipt, cid.Cid, error) {
 	// The genesis block did not execute any messages
 	if ts.Height() == 0 {
 		return nil, cid.Undef, nil
@@ -834,7 +843,7 @@ func (sm *StateManager) tipsetExecutedMessage(ts *types.TipSet, msg cid.Cid, vmm
 
 		if m.VMMessage().From == vmm.From { // cheaper to just check origin first
 			if m.VMMessage().Nonce == vmm.Nonce {
-				if m.VMMessage().EqualCall(vmm) {
+				if allowReplaced && m.VMMessage().EqualCall(vmm) {
 					if m.Cid() != msg {
 						log.Warnw("found message with equal nonce and call params but different CID",
 							"wanted", msg, "found", m.Cid(), "nonce", vmm.Nonce, "from", vmm.From)
@@ -1310,11 +1319,12 @@ func (sm *StateManager) GetVMCirculatingSupplyDetailed(ctx context.Context, heig
 	}
 
 	return api.CirculatingSupply{
-		FilVested:      filVested,
-		FilMined:       filMined,
-		FilBurnt:       filBurnt,
-		FilLocked:      filLocked,
-		FilCirculating: ret,
+		FilVested:           filVested,
+		FilMined:            filMined,
+		FilBurnt:            filBurnt,
+		FilLocked:           filLocked,
+		FilCirculating:      ret,
+		FilReserveDisbursed: filReserveDisbursed,
 	}, nil
 }
 
