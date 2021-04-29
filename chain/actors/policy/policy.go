@@ -29,7 +29,7 @@ import (
 	verifreg4 "github.com/filecoin-project/specs-actors/v4/actors/builtin/verifreg"
 )
 
-const (
+var (
 	ChainFinality                  = miner4.ChainFinality
 	SealRandomnessLookback         = ChainFinality
 	PaychSettleDelay               = paych4.SettleDelay
