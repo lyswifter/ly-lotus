@@ -26,13 +26,15 @@ const UpgradeActorsV2Height = 3
 const UpgradeLiftoffHeight = -5
 
 const UpgradeKumquatHeight = 5
-const UpgradeCalicoHeight = 1000
-const UpgradePersianHeight = 1005
-const UpgradeOrangeHeight = 1010
-const UpgradeClausHeight = 1015
+const UpgradeCalicoHeight = 6
+const UpgradePersianHeight = 7
+const UpgradeOrangeHeight = 8
+const UpgradeClausHeight = 9
 
-const UpgradeActorsV3Height = 1020
-const UpgradeNorwegianHeight = 1025
+const UpgradeActorsV3Height = 10
+const UpgradeNorwegianHeight = 11
+
+var UpgradeActorsV4Height = abi.ChainEpoch(12)
 
 func init() {
 	MessageConfidence = 2
