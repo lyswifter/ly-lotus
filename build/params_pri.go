@@ -53,7 +53,7 @@ func init() {
 	policy.SetPreCommitChallengeDelay(15)
 	policy.SetChainFinality(90)
 	policy.SetWPoStChallengeWindow(20)
-	// InteractivePoRepConfidence = 3
+	InteractivePoRepConfidence = 3
 	BuildType |= BuildPri
 }
 
