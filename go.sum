@@ -1109,6 +1109,8 @@ github.com/lyswifter/go-state-types v0.2.0 h1:KPvAWBGPxZ0Icl3+b7sY4wW0snhjGlXvuy
 github.com/lyswifter/go-state-types v0.2.0/go.mod h1:ezYnPf0bNkTsDibL/psSz5dy4B5awOJ/E7P2Saeep8g=
 github.com/lyswifter/specs-actors/v4 v4.0.3 h1:ulELjhJlEtfAHC+WEFdPJz0sx/mpBR/H9v2njnrqy04=
 github.com/lyswifter/specs-actors/v4 v4.0.3/go.mod h1:FH6lFmSPHenFj9+iESng8LSBKOfLwBm6gGelj2QWFZI=
+github.com/lyswifter/specs-actors/v4 v4.0.6 h1:crrJZw8MsmN5t2P8PiByS5ygi3QNczmaVRuDumngZdg=
+github.com/lyswifter/specs-actors/v4 v4.0.6/go.mod h1:FH6lFmSPHenFj9+iESng8LSBKOfLwBm6gGelj2QWFZI=
 github.com/magiconair/properties v1.8.0/go.mod h1:PppfXfuXeibc/6YijjN8zIbojt8czPbwD3XqdrwzmxQ=
 github.com/mailru/easyjson v0.0.0-20180823135443-60711f1a8329/go.mod h1:C1wdFJiN94OJF2b5HbByQZoLdCWB1Yqtg26g4irojpc=
 github.com/mailru/easyjson v0.0.0-20190312143242-1de009706dbe/go.mod h1:C1wdFJiN94OJF2b5HbByQZoLdCWB1Yqtg26g4irojpc=

@@ -167,4 +167,4 @@ replace github.com/filecoin-project/test-vectors => ./extern/test-vectors
 
 replace github.com/filecoin-project/go-state-types => github.com/lyswifter/go-state-types v0.2.0
 
-replace github.com/filecoin-project/specs-actors/v4 => github.com/lyswifter/specs-actors/v4 v4.0.3
+replace github.com/filecoin-project/specs-actors/v4 => github.com/lyswifter/specs-actors/v4 v4.0.6
