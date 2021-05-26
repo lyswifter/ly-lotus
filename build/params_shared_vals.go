@@ -18,6 +18,8 @@ import (
 // /////
 // Storage
 
+var InteractivePoRepConfidence = 32
+
 const UnixfsChunkSize uint64 = 1 << 20
 const UnixfsLinksPerLevel = 1024
 
