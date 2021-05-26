@@ -207,6 +207,14 @@ func DefaultUpgradeSchedule() UpgradeSchedule {
 			StopWithin:      5,
 		}},
 		Expensive: true,
+	}, {
+		Height:    build.UpgradeNanNanHeight,
+		Network:   network.Version13,
+		Migration: nil,
+	}, {
+		Height:    build.UpgradeSwifterHeight,
+		Network:   network.Version14,
+		Migration: nil,
 	}}
 
 	for _, u := range updates {

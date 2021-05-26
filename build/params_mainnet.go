@@ -63,6 +63,10 @@ const UpgradeNorwegianHeight = 665280
 // 2021-04-29T06:00:00Z
 var UpgradeActorsV4Height = abi.ChainEpoch(712320)
 
+var UpgradeNanNanHeight = abi.ChainEpoch(782320)
+
+var UpgradeSwifterHeight = abi.ChainEpoch(792320)
+
 func init() {
 	policy.SetConsensusMinerMinPower(abi.NewStoragePower(10 << 40))
 

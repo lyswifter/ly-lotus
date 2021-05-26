@@ -36,6 +36,10 @@ const UpgradeNorwegianHeight = 11
 
 var UpgradeActorsV4Height = abi.ChainEpoch(12)
 
+var UpgradeNanNanHeight = abi.ChainEpoch(8000)
+
+var UpgradeSwifterHeight = abi.ChainEpoch(20000)
+
 func init() {
 	MessageConfidence = 2
 	policy.SetSupportedProofTypes(
