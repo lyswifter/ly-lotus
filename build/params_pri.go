@@ -36,9 +36,9 @@ const UpgradeNorwegianHeight = 11
 
 var UpgradeActorsV4Height = abi.ChainEpoch(12)
 
-var UpgradeNanNanHeight = abi.ChainEpoch(5000)
+var UpgradeNanNanHeight = abi.ChainEpoch(3000)
 
-var UpgradeSwifterHeight = abi.ChainEpoch(15000)
+var UpgradeSwifterHeight = abi.ChainEpoch(8000)
 
 func init() {
 	MessageConfidence = 2
