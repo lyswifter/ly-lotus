@@ -26,6 +26,10 @@ func VersionForNetwork(version network.Version) Version {
 		return Version3
 	case network.Version12:
 		return Version4
+	case network.Version13:
+		return Version4
+	case network.Version14:
+		return Version4
 	default:
 		panic(fmt.Sprintf("unsupported network version %d", version))
 	}
