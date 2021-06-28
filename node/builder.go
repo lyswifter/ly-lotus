@@ -333,6 +333,7 @@ var ChainNode = Options(
 
 	// Lite node API
 	ApplyIf(isLiteNode,
+		Override(new(messagepool.Provider), messagepool.NewProviderLite),
 		Override(new(messagesigner.MpoolNonceAPI), From(new(modules.MpoolNonceAPI))),
 		Override(new(full.ChainModuleAPI), From(new(api.Gateway))),
 		Override(new(full.GasModuleAPI), From(new(api.Gateway))),
@@ -343,6 +344,7 @@ var ChainNode = Options(
 
 	// Full node API / service startup
 	ApplyIf(isFullNode,
+		Override(new(messagepool.Provider), messagepool.NewProvider),
 		Override(new(messagesigner.MpoolNonceAPI), From(new(*messagepool.MessagePool))),
 		Override(new(full.ChainModuleAPI), From(new(full.ChainModule))),
 		Override(new(full.GasModuleAPI), From(new(full.GasModule))),
@@ -373,12 +375,16 @@ var MinerNode = Options(
 	Override(new(*stores.Index), stores.NewIndex),
 	Override(new(stores.SectorIndex), From(new(*stores.Index))),
 	Override(new(stores.LocalStorage), From(new(repo.LockedRepo))),
+	Override(new(*stores.Local), modules.LocalStorage),
+	Override(new(*stores.Remote), modules.RemoteStorage),
 	Override(new(*sectorstorage.Manager), modules.SectorStorage),
 	Override(new(sectorstorage.SectorManager), From(new(*sectorstorage.Manager))),
 	Override(new(storiface.WorkerReturn), From(new(sectorstorage.SectorManager))),
+	Override(new(sectorstorage.Unsealer), From(new(*sectorstorage.Manager))),
 
 	// Sector storage: Proofs
 	Override(new(ffiwrapper.Verifier), ffiwrapper.ProofVerifier),
+	Override(new(ffiwrapper.Prover), ffiwrapper.ProofProver),
 	Override(new(storage2.Prover), From(new(sectorstorage.SectorManager))),
 
 	// Sealing
@@ -402,8 +408,17 @@ var MinerNode = Options(
 	Override(new(*sectorblocks.SectorBlocks), sectorblocks.NewSectorBlocks),
 
 	// Markets (retrieval)
+	Override(new(sectorstorage.PieceProvider), sectorstorage.NewPieceProvider),
+	Override(new(dtypes.RetrievalPricingFunc), modules.RetrievalPricingFunc(config.DealmakingConfig{
+		RetrievalPricing: &config.RetrievalPricing{
+			Strategy: config.RetrievalPricingDefaultMode,
+			Default:  &config.RetrievalPricingDefault{},
+		},
+	})),
+	Override(new(sectorstorage.PieceProvider), sectorstorage.NewPieceProvider),
 	Override(new(retrievalmarket.RetrievalProvider), modules.RetrievalProvider),
 	Override(new(dtypes.RetrievalDealFilter), modules.RetrievalDealFilter(nil)),
+
 	Override(HandleRetrievalKey, modules.HandleRetrieval),
 
 	// Markets (storage)
@@ -435,6 +450,8 @@ var MinerNode = Options(
 	Override(new(dtypes.GetSealingConfigFunc), modules.NewGetSealConfigFunc),
 	Override(new(dtypes.SetExpectedSealDurationFunc), modules.NewSetExpectedSealDurationFunc),
 	Override(new(dtypes.GetExpectedSealDurationFunc), modules.NewGetExpectedSealDurationFunc),
+	Override(new(dtypes.SetMaxDealStartDelayFunc), modules.NewSetMaxDealStartDelayFunc),
+	Override(new(dtypes.GetMaxDealStartDelayFunc), modules.NewGetMaxDealStartDelayFunc),
 )
 
 // Online sets up basic libp2p node
@@ -557,6 +574,19 @@ func ConfigStorageMiner(c interface{}) Option {
 		return Error(xerrors.Errorf("invalid config from repo, got: %T", c))
 	}
 
+	pricingConfig := cfg.Dealmaking.RetrievalPricing
+	if pricingConfig.Strategy == config.RetrievalPricingExternalMode {
+		if pricingConfig.External == nil {
+			return Error(xerrors.New("retrieval pricing policy has been to set to external but external policy config is nil"))
+		}
+
+		if pricingConfig.External.Path == "" {
+			return Error(xerrors.New("retrieval pricing policy has been to set to external but external script path is empty"))
+		}
+	} else if pricingConfig.Strategy != config.RetrievalPricingDefaultMode {
+		return Error(xerrors.New("retrieval pricing policy must be either default or external"))
+	}
+
 	return Options(
 		ConfigCommon(&cfg.Common),
 
@@ -567,6 +597,8 @@ func ConfigStorageMiner(c interface{}) Option {
 		If(cfg.Dealmaking.RetrievalFilter != "",
 			Override(new(dtypes.RetrievalDealFilter), modules.RetrievalDealFilter(dealfilter.CliRetrievalDealFilter(cfg.Dealmaking.RetrievalFilter))),
 		),
+
+		Override(new(dtypes.RetrievalPricingFunc), modules.RetrievalPricingFunc(cfg.Dealmaking)),
 
 		Override(new(*storageadapter.DealPublisher), storageadapter.NewDealPublisher(&cfg.Fees, storageadapter.PublishMsgConfig{
 			Period:         time.Duration(cfg.Dealmaking.PublishMsgPeriod),

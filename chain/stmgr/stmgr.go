@@ -7,6 +7,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/filecoin-project/lotus/chain/actors/policy"
+
 	"github.com/ipfs/go-cid"
 	cbor "github.com/ipfs/go-ipld-cbor"
 	logging "github.com/ipfs/go-log/v2"
@@ -90,6 +92,7 @@ type StateManager struct {
 	expensiveUpgrades map[abi.ChainEpoch]struct{}
 
 	stCache             map[string][]cid.Cid
+	tCache              treeCache
 	compWait            map[string]chan struct{}
 	stlk                sync.Mutex
 	genesisMsigLk       sync.Mutex
@@ -100,6 +103,14 @@ type StateManager struct {
 
 	genesisPledge      abi.TokenAmount
 	genesisMarketFunds abi.TokenAmount
+
+	tsExecMonitor ExecMonitor
+}
+
+// Caches a single state tree
+type treeCache struct {
+	root cid.Cid
+	tree *state.StateTree
 }
 
 func NewStateManager(cs *store.ChainStore) *StateManager {
@@ -154,8 +165,21 @@ func NewStateManagerWithUpgradeSchedule(cs *store.ChainStore, us UpgradeSchedule
 		newVM:             vm.NewVM,
 		cs:                cs,
 		stCache:           make(map[string][]cid.Cid),
-		compWait:          make(map[string]chan struct{}),
+		tCache: treeCache{
+			root: cid.Undef,
+			tree: nil,
+		},
+		compWait: make(map[string]chan struct{}),
 	}, nil
+}
+
+func NewStateManagerWithUpgradeScheduleAndMonitor(cs *store.ChainStore, us UpgradeSchedule, em ExecMonitor) (*StateManager, error) {
+	sm, err := NewStateManagerWithUpgradeSchedule(cs, us)
+	if err != nil {
+		return nil, err
+	}
+	sm.tsExecMonitor = em
+	return sm, nil
 }
 
 func cidsToKey(cids []cid.Cid) string {
@@ -242,7 +266,7 @@ func (sm *StateManager) TipSetState(ctx context.Context, ts *types.TipSet) (st c
 		return ts.Blocks()[0].ParentStateRoot, ts.Blocks()[0].ParentMessageReceipts, nil
 	}
 
-	st, rec, err = sm.computeTipSetState(ctx, ts, nil)
+	st, rec, err = sm.computeTipSetState(ctx, ts, sm.tsExecMonitor)
 	if err != nil {
 		return cid.Undef, cid.Undef, err
 	}
@@ -250,41 +274,21 @@ func (sm *StateManager) TipSetState(ctx context.Context, ts *types.TipSet) (st c
 	return st, rec, nil
 }
 
-func traceFunc(trace *[]*api.InvocResult) func(mcid cid.Cid, msg *types.Message, ret *vm.ApplyRet) error {
-	return func(mcid cid.Cid, msg *types.Message, ret *vm.ApplyRet) error {
-		ir := &api.InvocResult{
-			MsgCid:         mcid,
-			Msg:            msg,
-			MsgRct:         &ret.MessageReceipt,
-			ExecutionTrace: ret.ExecutionTrace,
-			Duration:       ret.Duration,
-		}
-		if ret.ActorErr != nil {
-			ir.Error = ret.ActorErr.Error()
-		}
-		if ret.GasCosts != nil {
-			ir.GasCost = MakeMsgGasCost(msg, ret)
-		}
-		*trace = append(*trace, ir)
-		return nil
-	}
+func (sm *StateManager) ExecutionTraceWithMonitor(ctx context.Context, ts *types.TipSet, em ExecMonitor) (cid.Cid, error) {
+	st, _, err := sm.computeTipSetState(ctx, ts, em)
+	return st, err
 }
 
 func (sm *StateManager) ExecutionTrace(ctx context.Context, ts *types.TipSet) (cid.Cid, []*api.InvocResult, error) {
-	var trace []*api.InvocResult
-	st, _, err := sm.computeTipSetState(ctx, ts, traceFunc(&trace))
+	var invocTrace []*api.InvocResult
+	st, err := sm.ExecutionTraceWithMonitor(ctx, ts, &InvocationTracer{trace: &invocTrace})
 	if err != nil {
 		return cid.Undef, nil, err
 	}
-
-	return st, trace, nil
+	return st, invocTrace, nil
 }
 
-type ExecCallback func(cid.Cid, *types.Message, *vm.ApplyRet) error
-
-func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEpoch, pstate cid.Cid, bms []store.BlockMessages, epoch abi.ChainEpoch, r vm.Rand, cb ExecCallback, baseFee abi.TokenAmount, ts *types.TipSet) (cid.Cid, cid.Cid, error) {
-	totalStart := build.Clock.Now()
-
+func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEpoch, pstate cid.Cid, bms []store.BlockMessages, epoch abi.ChainEpoch, r vm.Rand, em ExecMonitor, baseFee abi.TokenAmount, ts *types.TipSet) (cid.Cid, cid.Cid, error) {
 	done := metrics.Timer(ctx, metrics.VMApplyBlocksTotal)
 	defer done()
 
@@ -330,8 +334,8 @@ func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEp
 		if err != nil {
 			return err
 		}
-		if cb != nil {
-			if err := cb(cronMsg.Cid(), cronMsg, ret); err != nil {
+		if em != nil {
+			if err := em.MessageApplied(ctx, ts, cronMsg.Cid(), cronMsg, ret, true); err != nil {
 				return xerrors.Errorf("callback failed on cron message: %w", err)
 			}
 		}
@@ -357,7 +361,7 @@ func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEp
 
 		// handle state forks
 		// XXX: The state tree
-		newState, err := sm.handleStateForks(ctx, pstate, i, cb, ts)
+		newState, err := sm.handleStateForks(ctx, pstate, i, em, ts)
 		if err != nil {
 			return cid.Undef, cid.Undef, xerrors.Errorf("error handling state forks: %w", err)
 		}
@@ -398,8 +402,8 @@ func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEp
 			gasReward = big.Add(gasReward, r.GasCosts.MinerTip)
 			penalty = big.Add(penalty, r.GasCosts.MinerPenalty)
 
-			if cb != nil {
-				if err := cb(cm.Cid(), m, r); err != nil {
+			if em != nil {
+				if err := em.MessageApplied(ctx, ts, cm.Cid(), m, r, false); err != nil {
 					return cid.Undef, cid.Undef, err
 				}
 			}
@@ -431,8 +435,8 @@ func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEp
 		if actErr != nil {
 			return cid.Undef, cid.Undef, xerrors.Errorf("failed to apply reward message for miner %s: %w", b.Miner, actErr)
 		}
-		if cb != nil {
-			if err := cb(rwMsg.Cid(), rwMsg, ret); err != nil {
+		if em != nil {
+			if err := em.MessageApplied(ctx, ts, rwMsg.Cid(), rwMsg, ret, true); err != nil {
 				return cid.Undef, cid.Undef, xerrors.Errorf("callback failed on reward message: %w", err)
 			}
 		}
@@ -482,7 +486,7 @@ func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEp
 	return st, rectroot, nil
 }
 
-func (sm *StateManager) computeTipSetState(ctx context.Context, ts *types.TipSet, cb ExecCallback) (cid.Cid, cid.Cid, error) {
+func (sm *StateManager) computeTipSetState(ctx context.Context, ts *types.TipSet, em ExecMonitor) (cid.Cid, cid.Cid, error) {
 	ctx, span := trace.StartSpan(ctx, "computeTipSetState")
 	defer span.End()
 
@@ -518,14 +522,7 @@ func (sm *StateManager) computeTipSetState(ctx context.Context, ts *types.TipSet
 
 	baseFee := blks[0].ParentBaseFee
 
-	applyBlocksStart := build.Clock.Now()
-	log.Infof("ApplyBlocks: start height: %d", blks[0].Height)
-	stcid, reccid, err := sm.ApplyBlocks(ctx, parentEpoch, pstate, blkmsgs, blks[0].Height, r, cb, baseFee, ts)
-	if err == nil {
-		log.Infow("ApplyBlocks: finished", "epoch", blks[0].Height, "blkmsgs", len(blkmsgs), "took", build.Clock.Since(applyBlocksStart).String())
-	}
-
-	return stcid, reccid, err
+    return sm.ApplyBlocks(ctx, parentEpoch, pstate, blkmsgs, blks[0].Height, r, em, baseFee, ts)
 }
 
 func (sm *StateManager) parentState(ts *types.TipSet) cid.Cid {
@@ -580,6 +577,52 @@ func (sm *StateManager) ResolveToKeyAddress(ctx context.Context, addr address.Ad
 	}
 
 	return vm.ResolveToKeyAddr(tree, cst, addr)
+}
+
+// ResolveToKeyAddressAtFinality is similar to stmgr.ResolveToKeyAddress but fails if the ID address being resolved isn't reorg-stable yet.
+// It should not be used for consensus-critical subsystems.
+func (sm *StateManager) ResolveToKeyAddressAtFinality(ctx context.Context, addr address.Address, ts *types.TipSet) (address.Address, error) {
+	switch addr.Protocol() {
+	case address.BLS, address.SECP256K1:
+		return addr, nil
+	case address.Actor:
+		return address.Undef, xerrors.New("cannot resolve actor address to key address")
+	default:
+	}
+
+	if ts == nil {
+		ts = sm.cs.GetHeaviestTipSet()
+	}
+
+	var err error
+	if ts.Height() > policy.ChainFinality {
+		ts, err = sm.ChainStore().GetTipsetByHeight(ctx, ts.Height()-policy.ChainFinality, ts, true)
+		if err != nil {
+			return address.Undef, xerrors.Errorf("failed to load lookback tipset: %w", err)
+		}
+	}
+
+	cst := cbor.NewCborStore(sm.cs.StateBlockstore())
+	tree := sm.tCache.tree
+
+	if tree == nil || sm.tCache.root != ts.ParentState() {
+		tree, err = state.LoadStateTree(cst, ts.ParentState())
+		if err != nil {
+			return address.Undef, xerrors.Errorf("failed to load parent state tree: %w", err)
+		}
+
+		sm.tCache = treeCache{
+			root: ts.ParentState(),
+			tree: tree,
+		}
+	}
+
+	resolved, err := vm.ResolveToKeyAddr(tree, cst, addr)
+	if err == nil {
+		return resolved, nil
+	}
+
+	return address.Undef, xerrors.New("ID address not found in lookback state")
 }
 
 func (sm *StateManager) GetBlsPublicKey(ctx context.Context, addr address.Address, ts *types.TipSet) (pubk []byte, err error) {
@@ -873,10 +916,7 @@ func (sm *StateManager) ListAllActors(ctx context.Context, ts *types.TipSet) ([]
 	if ts == nil {
 		ts = sm.cs.GetHeaviestTipSet()
 	}
-	st, _, err := sm.TipSetState(ctx, ts)
-	if err != nil {
-		return nil, err
-	}
+	st := ts.ParentState()
 
 	stateTree, err := sm.StateTree(st)
 	if err != nil {
@@ -1163,8 +1203,8 @@ func (sm *StateManager) GetFilVested(ctx context.Context, height abi.ChainEpoch,
 		}
 	}
 
-	// After UpgradeActorsV2Height these funds are accounted for in GetFilReserveDisbursed
-	if height <= build.UpgradeActorsV2Height {
+	// After UpgradeAssemblyHeight these funds are accounted for in GetFilReserveDisbursed
+	if height <= build.UpgradeAssemblyHeight {
 		// continue to use preIgnitionGenInfos, nothing changed at the Ignition epoch
 		vf = big.Add(vf, sm.genesisPledge)
 		// continue to use preIgnitionGenInfos, nothing changed at the Ignition epoch
@@ -1287,7 +1327,7 @@ func (sm *StateManager) GetVMCirculatingSupplyDetailed(ctx context.Context, heig
 	}
 
 	filReserveDisbursed := big.Zero()
-	if height > build.UpgradeActorsV2Height {
+	if height > build.UpgradeAssemblyHeight {
 		filReserveDisbursed, err = GetFilReserveDisbursed(ctx, st)
 		if err != nil {
 			return api.CirculatingSupply{}, xerrors.Errorf("failed to calculate filReserveDisbursed: %w", err)

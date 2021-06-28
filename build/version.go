@@ -1,15 +1,17 @@
 package build
 
+import "os"
+
 var CurrentCommit string
 var BuildType int
 
 const (
-	BuildDefault  = 0
-	BuildMainnet  = 0x1
-	Build2k       = 0x2
-	BuildDebug    = 0x3
-	BuildCalibnet = 0x4
-	BuildPri      = 0x5
+	BuildDefault    = 0
+	BuildMainnet    = 0x1
+	Build2k         = 0x2
+	BuildDebug      = 0x3
+	BuildCalibnet   = 0x4
+	BuildInteropnet = 0x5
 )
 
 func buildType() string {
@@ -24,8 +26,8 @@ func buildType() string {
 		return "+debug"
 	case BuildCalibnet:
 		return "+calibnet"
-	case BuildPri:
-		return "+pri"
+	case BuildInteropnet:
+		return "+interopnet"
 	default:
 		return "+huh?"
 	}
@@ -35,5 +37,9 @@ func buildType() string {
 const BuildVersion = "1.11.0-dev"
 
 func UserVersion() string {
+	if os.Getenv("LOTUS_VERSION_IGNORE_COMMIT") == "1" {
+		return BuildVersion
+	}
+
 	return BuildVersion + buildType() + CurrentCommit
 }
