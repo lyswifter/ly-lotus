@@ -380,8 +380,6 @@ func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEp
 	partDone()
 	partDone = metrics.Timer(ctx, metrics.VMApplyMessages)
 
-	msgStart := build.Clock.Now()
-
 	var receipts []cbg.CBORMarshaler
 	processedMsgs := make(map[cid.Cid]struct{})
 	for _, b := range bms {
@@ -445,17 +443,13 @@ func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEp
 			return cid.Undef, cid.Undef, xerrors.Errorf("reward application message failed (exit %d): %s", ret.ExitCode, ret.ActorErr)
 		}
 	}
-	msgTook := build.Clock.Since(msgStart).String()
 
 	partDone()
 	partDone = metrics.Timer(ctx, metrics.VMApplyCron)
 
-	cronStart := build.Clock.Now()
-
 	if err := runCron(epoch); err != nil {
 		return cid.Cid{}, cid.Cid{}, err
 	}
-	cronTook := build.Clock.Since(cronStart).String()
 
 	partDone()
 	partDone = metrics.Timer(ctx, metrics.VMApplyFlush)
@@ -471,14 +465,10 @@ func (sm *StateManager) ApplyBlocks(ctx context.Context, parentEpoch abi.ChainEp
 		return cid.Undef, cid.Undef, xerrors.Errorf("failed to build receipts amt: %w", err)
 	}
 
-	flushStart := build.Clock.Now()
 	st, err := vmi.Flush(ctx)
 	if err != nil {
 		return cid.Undef, cid.Undef, xerrors.Errorf("vm flush failed: %w", err)
 	}
-	flushTook := build.Clock.Since(flushStart).String()
-
-	log.Infow("applyMsg", "ts.height", ts.Height(), "msgTook", msgTook, "cronTook", cronTook, "flushTook", flushTook, "total", build.Clock.Since(totalStart).String())
 
 	stats.Record(ctx, metrics.VMSends.M(int64(atomic.LoadUint64(&vm.StatSends))),
 		metrics.VMApplied.M(int64(atomic.LoadUint64(&vm.StatApplied))))
@@ -522,7 +512,7 @@ func (sm *StateManager) computeTipSetState(ctx context.Context, ts *types.TipSet
 
 	baseFee := blks[0].ParentBaseFee
 
-    return sm.ApplyBlocks(ctx, parentEpoch, pstate, blkmsgs, blks[0].Height, r, em, baseFee, ts)
+	return sm.ApplyBlocks(ctx, parentEpoch, pstate, blkmsgs, blks[0].Height, r, em, baseFee, ts)
 }
 
 func (sm *StateManager) parentState(ts *types.TipSet) cid.Cid {
