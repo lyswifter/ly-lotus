@@ -30,6 +30,7 @@ import (
 
 func init() {
 	policy.SetSupportedProofTypes(abi.RegisteredSealProof_StackedDrg2KiBV1)
+	build.SetAddressNetwork(address.Testnet)
 }
 
 func (api *api) Spawn() (nodeInfo, error) {
