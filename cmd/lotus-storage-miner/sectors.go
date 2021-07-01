@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strconv"
@@ -10,10 +12,12 @@ import (
 
 	"github.com/docker/go-units"
 	"github.com/fatih/color"
+	"github.com/ipld/go-car"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-bitfield"
+	"github.com/filecoin-project/go-padreader"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	miner3 "github.com/filecoin-project/specs-actors/v3/actors/builtin/miner"
@@ -52,20 +56,89 @@ var sectorsCmd = &cli.Command{
 var sectorsPledgeCmd = &cli.Command{
 	Name:  "pledge",
 	Usage: "store random data in a sector",
+	Flags: []cli.Flag{
+		&cli.StringFlag{
+			Name:  "inputfile",
+			Usage: "input file path",
+		},
+		&cli.StringFlag{
+			Name:  "outputfile",
+			Usage: "onput file path, xxx.car",
+		},
+	},
 	Action: func(cctx *cli.Context) error {
 		nodeApi, closer, err := lcli.GetStorageMinerAPI(cctx)
 		if err != nil {
 			return err
 		}
 		defer closer()
-		ctx := lcli.ReqContext(cctx)
 
-		id, err := nodeApi.PledgeSector(ctx)
-		if err != nil {
-			return err
+		if cctx.String("inputfile") != "" && cctx.String("outputfile") != "" {
+			fapi, fcloser, err := lcli.GetFullNodeAPIV1(cctx)
+			if err != nil {
+				return err
+			}
+			defer fcloser()
+
+			ctx := lcli.ReqContext(cctx)
+
+			err = fapi.ClientGenCar(ctx, api.FileRef{
+				Path:  cctx.String("inputfile"),
+				IsCAR: false,
+			}, cctx.String("outputfile"))
+			if err != nil {
+				return err
+			}
+
+			// spt := abi.RegisteredSealProof_StackedDrg2KiBV1_1
+
+			// ClientCalcCommP
+			commP, err := fapi.ClientCalcCommP(ctx, cctx.String("outputfile"))
+			if err != nil {
+				return err
+			}
+
+			rdr, err := os.Open(cctx.String("outputfile"))
+			if err != nil {
+				return err
+			}
+			defer rdr.Close() //nolint:errcheck
+
+			stat, err := rdr.Stat()
+			if err != nil {
+				return err
+			}
+
+			// check that the data is a car file; if it's not, retrieval won't work
+			_, _, err = car.ReadHeader(bufio.NewReader(rdr))
+			if err != nil {
+				return xerrors.Errorf("not a car file: %w", err)
+			}
+
+			if _, err := rdr.Seek(0, io.SeekStart); err != nil {
+				return xerrors.Errorf("seek to start: %w", err)
+			}
+
+			pieceReader, pieceSize := padreader.New(rdr, uint64(stat.Size()))
+			id, err := nodeApi.PledgeSector(ctx, pieceReader, &abi.PieceInfo{
+				Size:     pieceSize.Padded(),
+				PieceCID: commP.Root,
+			})
+			if err != nil {
+				return err
+			}
+
+			fmt.Println("Created CC sector: ", id.Number)
+		} else {
+			ctx := lcli.ReqContext(cctx)
+
+			id, err := nodeApi.PledgeSector(ctx, nil, nil)
+			if err != nil {
+				return err
+			}
+
+			fmt.Println("Created CC sector: ", id.Number)
 		}
-
-		fmt.Println("Created CC sector: ", id.Number)
 
 		return nil
 	},

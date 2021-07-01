@@ -635,7 +635,7 @@ type StorageMinerStruct struct {
 
 		PiecesListPieces func(p0 context.Context) ([]cid.Cid, error) `perm:"read"`
 
-		PledgeSector func(p0 context.Context) (abi.SectorID, error) `perm:"write"`
+		PledgeSector func(p0 context.Context, p1 storage.Data, p2 *abi.PieceInfo) (abi.SectorID, error) `perm:"write"`
 
 		ReturnAddPiece func(p0 context.Context, p1 storiface.CallID, p2 abi.PieceInfo, p3 *storiface.CallError) error `perm:"admin"`
 
@@ -3031,11 +3031,11 @@ func (s *StorageMinerStub) PiecesListPieces(p0 context.Context) ([]cid.Cid, erro
 	return *new([]cid.Cid), xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) PledgeSector(p0 context.Context) (abi.SectorID, error) {
-	return s.Internal.PledgeSector(p0)
+func (s *StorageMinerStruct) PledgeSector(p0 context.Context, p1 storage.Data, p2 *abi.PieceInfo) (abi.SectorID, error) {
+	return s.Internal.PledgeSector(p0, p1, p2)
 }
 
-func (s *StorageMinerStub) PledgeSector(p0 context.Context) (abi.SectorID, error) {
+func (s *StorageMinerStub) PledgeSector(p0 context.Context, p1 storage.Data, p2 *abi.PieceInfo) (abi.SectorID, error) {
 	return *new(abi.SectorID), xerrors.New("method not supported")
 }
 

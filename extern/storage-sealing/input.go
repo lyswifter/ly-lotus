@@ -236,6 +236,63 @@ func (m *Sealing) handleAddPieceFailed(ctx statemachine.Context, sector SectorIn
 	return nil
 }
 
+func (m *Sealing) AddPieceToAnyCCSector(ctx context.Context, size abi.UnpaddedPieceSize, data storage.Data, pieceInfo abi.PieceInfo) (abi.SectorNumber, abi.PaddedPieceSize, error) {
+	log.Infof("Adding piece for cc sectors")
+	if (padreader.PaddedSize(uint64(size))) != size {
+		return 0, 0, xerrors.Errorf("cannot allocate unpadded piece")
+	}
+
+	sp, err := m.currentSealProof(ctx)
+	if err != nil {
+		return 0, 0, xerrors.Errorf("getting current seal proof type: %w", err)
+	}
+
+	ssize, err := sp.SectorSize()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	if size > abi.PaddedPieceSize(ssize).Unpadded() {
+		return 0, 0, xerrors.Errorf("piece cannot fit into a sector")
+	}
+
+	m.inputLk.Lock()
+	if _, exist := m.pendingPieces[pieceInfo.PieceCID]; exist {
+		m.inputLk.Unlock()
+		return 0, 0, xerrors.Errorf("piece for data %s already pending", pieceInfo.PieceCID)
+	}
+
+	resCh := make(chan struct {
+		sn     abi.SectorNumber
+		offset abi.UnpaddedPieceSize
+		err    error
+	}, 1)
+
+	m.pendingPieces[pieceInfo.PieceCID] = &pendingPiece{
+		size:     size,
+		data:     data,
+		assigned: false,
+		accepted: func(sn abi.SectorNumber, offset abi.UnpaddedPieceSize, err error) {
+			resCh <- struct {
+				sn     abi.SectorNumber
+				offset abi.UnpaddedPieceSize
+				err    error
+			}{sn: sn, offset: offset, err: err}
+		},
+	}
+
+	go func() {
+		defer m.inputLk.Unlock()
+		if err := m.updateInput(ctx, sp); err != nil {
+			log.Errorf("%+v", err)
+		}
+	}()
+
+	res := <-resCh
+
+	return res.sn, res.offset.Padded(), res.err
+}
+
 func (m *Sealing) AddPieceToAnySector(ctx context.Context, size abi.UnpaddedPieceSize, data storage.Data, deal DealInfo) (abi.SectorNumber, abi.PaddedPieceSize, error) {
 	log.Infof("Adding piece for deal %d (publish msg: %s)", deal.DealID, deal.PublishCid)
 	if (padreader.PaddedSize(uint64(size))) != size {

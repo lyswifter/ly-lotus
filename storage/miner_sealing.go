@@ -20,6 +20,10 @@ func (m *Miner) Address() address.Address {
 	return m.sealing.Address()
 }
 
+func (m *Miner) AddPieceToAnyCCSector(ctx context.Context, size abi.UnpaddedPieceSize, r io.Reader, pieceInfo abi.PieceInfo) (abi.SectorNumber, abi.PaddedPieceSize, error) {
+	return m.sealing.AddPieceToAnyCCSector(ctx, size, r, pieceInfo)
+}
+
 func (m *Miner) AddPieceToAnySector(ctx context.Context, size abi.UnpaddedPieceSize, r io.Reader, d sealing.DealInfo) (abi.SectorNumber, abi.PaddedPieceSize, error) {
 	return m.sealing.AddPieceToAnySector(ctx, size, r, d)
 }
@@ -36,8 +40,8 @@ func (m *Miner) GetSectorInfo(sid abi.SectorNumber) (sealing.SectorInfo, error) 
 	return m.sealing.GetSectorInfo(sid)
 }
 
-func (m *Miner) PledgeSector(ctx context.Context) (storage.SectorRef, error) {
-	return m.sealing.PledgeSector(ctx)
+func (m *Miner) PledgeSector(ctx context.Context, data storage.Data, pieceInfo *abi.PieceInfo) (storage.SectorRef, error) {
+	return m.sealing.PledgeSector(ctx, data, pieceInfo)
 }
 
 func (m *Miner) ForceSectorState(ctx context.Context, id abi.SectorNumber, state sealing.SectorState) error {
