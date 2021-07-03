@@ -59,7 +59,7 @@ func StartPledge(t *testing.T, ctx context.Context, miner TestMiner, n, existing
 			t.Log("WAIT")
 		}
 		t.Logf("PLEDGING %d", i)
-		_, err := miner.PledgeSector(ctx)
+		_, err := miner.PledgeSector(ctx, true)
 		require.NoError(t, err)
 	}
 

@@ -19,11 +19,17 @@ import (
 	"github.com/filecoin-project/lotus/extern/storage-sealing/sealiface"
 )
 
+func (m *Sealing) handleWaitPieces(ctx statemachine.Context, sector SectorInfo) error {
+	return nil
+}
+
 func (m *Sealing) handleWaitDeals(ctx statemachine.Context, sector SectorInfo) error {
 	var used abi.UnpaddedPieceSize
 	for _, piece := range sector.Pieces {
 		used += piece.Piece.Size.Unpadded()
 	}
+
+	log.Info("handleWaitDeals: %+v used: %d", sector, used)
 
 	m.inputLk.Lock()
 
@@ -36,6 +42,7 @@ func (m *Sealing) handleWaitDeals(ctx statemachine.Context, sector SectorInfo) e
 	if len(m.assignedPieces[sid]) > 0 {
 		m.inputLk.Unlock()
 		// got assigned more pieces in the AddPiece state
+		log.Info("assign enough pieces")
 		return ctx.Send(SectorAddPiece{})
 	}
 
@@ -55,6 +62,7 @@ func (m *Sealing) handleWaitDeals(ctx statemachine.Context, sector SectorInfo) e
 				// todo check deal start deadline (configurable)
 				m.assignedPieces[sid] = append(m.assignedPieces[sid], cid)
 
+				log.Infof("maybeAccept sid: %+v assignedPieces len: %d", sid, len(m.assignedPieces))
 				return ctx.Send(SectorAddPiece{})
 			},
 		}
@@ -236,63 +244,6 @@ func (m *Sealing) handleAddPieceFailed(ctx statemachine.Context, sector SectorIn
 	return nil
 }
 
-func (m *Sealing) AddPieceToAnyCCSector(ctx context.Context, size abi.UnpaddedPieceSize, data storage.Data, pieceInfo abi.PieceInfo) (abi.SectorNumber, abi.PaddedPieceSize, error) {
-	log.Infof("Adding piece for cc sectors")
-	if (padreader.PaddedSize(uint64(size))) != size {
-		return 0, 0, xerrors.Errorf("cannot allocate unpadded piece")
-	}
-
-	sp, err := m.currentSealProof(ctx)
-	if err != nil {
-		return 0, 0, xerrors.Errorf("getting current seal proof type: %w", err)
-	}
-
-	ssize, err := sp.SectorSize()
-	if err != nil {
-		return 0, 0, err
-	}
-
-	if size > abi.PaddedPieceSize(ssize).Unpadded() {
-		return 0, 0, xerrors.Errorf("piece cannot fit into a sector")
-	}
-
-	m.inputLk.Lock()
-	if _, exist := m.pendingPieces[pieceInfo.PieceCID]; exist {
-		m.inputLk.Unlock()
-		return 0, 0, xerrors.Errorf("piece for data %s already pending", pieceInfo.PieceCID)
-	}
-
-	resCh := make(chan struct {
-		sn     abi.SectorNumber
-		offset abi.UnpaddedPieceSize
-		err    error
-	}, 1)
-
-	m.pendingPieces[pieceInfo.PieceCID] = &pendingPiece{
-		size:     size,
-		data:     data,
-		assigned: false,
-		accepted: func(sn abi.SectorNumber, offset abi.UnpaddedPieceSize, err error) {
-			resCh <- struct {
-				sn     abi.SectorNumber
-				offset abi.UnpaddedPieceSize
-				err    error
-			}{sn: sn, offset: offset, err: err}
-		},
-	}
-
-	go func() {
-		defer m.inputLk.Unlock()
-		if err := m.updateInput(ctx, sp); err != nil {
-			log.Errorf("%+v", err)
-		}
-	}()
-
-	res := <-resCh
-
-	return res.sn, res.offset.Padded(), res.err
-}
-
 func (m *Sealing) AddPieceToAnySector(ctx context.Context, size abi.UnpaddedPieceSize, data storage.Data, deal DealInfo) (abi.SectorNumber, abi.PaddedPieceSize, error) {
 	log.Infof("Adding piece for deal %d (publish msg: %s)", deal.DealID, deal.PublishCid)
 	if (padreader.PaddedSize(uint64(size))) != size {
@@ -385,6 +336,8 @@ func (m *Sealing) updateInput(ctx context.Context, sp abi.RegisteredSealProof) e
 		for id, sector := range m.openSectors {
 			avail := abi.PaddedPieceSize(ssize).Unpadded() - sector.used
 
+			log.Infof("piece.size: %d avail: %d sector.used: %d", piece.size, avail, sector.used)
+
 			if piece.size <= avail { // (note: if we have enough space for the piece, we also have enough space for inter-piece padding)
 				matches = append(matches, match{
 					sector: id,
@@ -407,6 +360,8 @@ func (m *Sealing) updateInput(ctx context.Context, sp abi.RegisteredSealProof) e
 
 		return matches[i].sector.Number < matches[j].sector.Number // prefer older sectors
 	})
+
+	log.Infof("matches: %+v", matches)
 
 	var assigned int
 	for _, mt := range matches {

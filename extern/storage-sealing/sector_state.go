@@ -52,6 +52,7 @@ const (
 
 	// happy path
 	Empty      SectorState = "Empty"      // deprecated
+	WaitPieces SectorState = "WaitPieces" // WaitPieces
 	WaitDeals  SectorState = "WaitDeals"  // waiting for more pieces (deals) to be added to the sector
 	AddPiece   SectorState = "AddPiece"   // put deal data (and padding if required) into the sector
 	Packing    SectorState = "Packing"    // sector not in sealStore, and not on chain

@@ -80,7 +80,7 @@ func testTapeFix(t *testing.T, b kit.APIBuilder, blocktime time.Duration, after 
 		<-done
 	}()
 
-	sid, err := miner.PledgeSector(ctx)
+	sid, err := miner.PledgeSector(ctx, true)
 	require.NoError(t, err)
 
 	fmt.Printf("All sectors is fsm\n")

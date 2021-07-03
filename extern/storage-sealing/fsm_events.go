@@ -57,6 +57,16 @@ func (evt SectorForceState) applyGlobal(state *SectorInfo) bool {
 
 // Normal path
 
+type SectorStartRaw struct {
+	ID         abi.SectorNumber
+	SectorType abi.RegisteredSealProof
+}
+
+func (evt SectorStartRaw) apply(state *SectorInfo) {
+	state.SectorNumber = evt.ID
+	state.SectorType = evt.SectorType
+}
+
 type SectorStart struct {
 	ID         abi.SectorNumber
 	SectorType abi.RegisteredSealProof

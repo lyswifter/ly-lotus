@@ -219,6 +219,7 @@ func (sb *Sealer) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 	}
 
 	if payloadRoundedBytes < pieceSize.Padded() {
+		log.Infof("payloadRoundedBytes: %d pieceSize.Padded(): %d", payloadRoundedBytes, pieceSize.Padded())
 		paddedCid, err := commpffi.ZeroPadPieceCommitment(pieceCID, payloadRoundedBytes.Unpadded(), pieceSize)
 		if err != nil {
 			return abi.PieceInfo{}, xerrors.Errorf("failed to pad data: %w", err)

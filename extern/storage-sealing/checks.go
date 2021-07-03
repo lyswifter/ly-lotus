@@ -11,7 +11,6 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
-	"github.com/filecoin-project/go-commp-utils/zerocomm"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/crypto"
 )
@@ -45,10 +44,13 @@ func checkPieces(ctx context.Context, maddr address.Address, si SectorInfo, api 
 		// if no deal is associated with the piece, ensure that we added it as
 		// filler (i.e. ensure that it has a zero PieceCID)
 		if p.DealInfo == nil {
-			exp := zerocomm.ZeroPieceCommitment(p.Piece.Size.Unpadded())
-			if !p.Piece.PieceCID.Equals(exp) {
-				return &ErrInvalidPiece{xerrors.Errorf("sector %d piece %d had non-zero PieceCID %+v", si.SectorNumber, i, p.Piece.PieceCID)}
-			}
+			// exp := zerocomm.ZeroPieceCommitment(p.Piece.Size.Unpadded())
+			// if !p.Piece.PieceCID.Equals(exp) {
+			// 	return &ErrInvalidPiece{xerrors.Errorf("sector %d piece %d had non-zero PieceCID %+v", si.SectorNumber, i, p.Piece.PieceCID)}
+			// }
+
+			log.Infof("pieceinfo has no dealinfo inside: %+v", p)
+
 			continue
 		}
 

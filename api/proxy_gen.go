@@ -635,7 +635,9 @@ type StorageMinerStruct struct {
 
 		PiecesListPieces func(p0 context.Context) ([]cid.Cid, error) `perm:"read"`
 
-		PledgeSector func(p0 context.Context, p1 storage.Data, p2 *abi.PieceInfo) (abi.SectorID, error) `perm:"write"`
+		PledgeSector func(p0 context.Context, p1 bool) (abi.SectorID, error) `perm:"write"`
+
+		AssignPieceIntoAnyRawSectors func(p0 context.Context, p1 string) (*abi.PieceInfo, error) `perm:"write"`
 
 		ReturnAddPiece func(p0 context.Context, p1 storiface.CallID, p2 abi.PieceInfo, p3 *storiface.CallError) error `perm:"admin"`
 
@@ -3031,12 +3033,20 @@ func (s *StorageMinerStub) PiecesListPieces(p0 context.Context) ([]cid.Cid, erro
 	return *new([]cid.Cid), xerrors.New("method not supported")
 }
 
-func (s *StorageMinerStruct) PledgeSector(p0 context.Context, p1 storage.Data, p2 *abi.PieceInfo) (abi.SectorID, error) {
-	return s.Internal.PledgeSector(p0, p1, p2)
+func (s *StorageMinerStruct) PledgeSector(p0 context.Context, p1 bool) (abi.SectorID, error) {
+	return s.Internal.PledgeSector(p0, p1)
 }
 
-func (s *StorageMinerStub) PledgeSector(p0 context.Context, p1 storage.Data, p2 *abi.PieceInfo) (abi.SectorID, error) {
+func (s *StorageMinerStub) PledgeSector(p0 context.Context, p1 bool) (abi.SectorID, error) {
 	return *new(abi.SectorID), xerrors.New("method not supported")
+}
+
+func (s *StorageMinerStruct) AssignPieceIntoAnyRawSectors(p0 context.Context, p1 string) (*abi.PieceInfo, error) {
+	return s.Internal.AssignPieceIntoAnyRawSectors(p0, p1)
+}
+
+func (s *StorageMinerStub) AssignPieceIntoAnyRawSectors(p0 context.Context, p1 string) (*abi.PieceInfo, error) {
+	return new(abi.PieceInfo), xerrors.New("method not support")
 }
 
 func (s *StorageMinerStruct) ReturnAddPiece(p0 context.Context, p1 storiface.CallID, p2 abi.PieceInfo, p3 *storiface.CallError) error {
