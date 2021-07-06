@@ -512,7 +512,13 @@ func (sm *StateManager) computeTipSetState(ctx context.Context, ts *types.TipSet
 
 	baseFee := blks[0].ParentBaseFee
 
-	return sm.ApplyBlocks(ctx, parentEpoch, pstate, blkmsgs, blks[0].Height, r, em, baseFee, ts)
+	applyBlocksStart := build.Clock.Now()
+	stcid, reccid, err := sm.ApplyBlocks(ctx, parentEpoch, pstate, blkmsgs, blks[0].Height, r, em, baseFee, ts)
+	if err == nil {
+		log.Infow("ApplyBlocks", "parentEpoch", parentEpoch, "blkmsgs", len(blkmsgs), "stcid", stcid, "reccid", reccid, "took", build.Clock.Since(applyBlocksStart).String())
+	}
+
+	return stcid, reccid, err
 }
 
 func (sm *StateManager) parentState(ts *types.TipSet) cid.Cid {
