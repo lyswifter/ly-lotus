@@ -7,7 +7,10 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-state-types/abi"
+	logging "github.com/ipfs/go-log/v2"
 )
+
+var log = logging.Logger("fr32")
 
 type unpadReader struct {
 	src io.Reader
@@ -32,6 +35,8 @@ func NewUnpadReader(src io.Reader, sz abi.PaddedPieceSize) (io.Reader, error) {
 }
 
 func (r *unpadReader) Read(out []byte) (int, error) {
+	log.Info("Read-fr32: %d out-len: %d chunks: %d outTwoPow: %d", r.left, len(out), len(out)/127, 1<<(63-bits.LeadingZeros64(uint64(len(out)*128))))
+
 	if r.left == 0 {
 		return 0, io.EOF
 	}

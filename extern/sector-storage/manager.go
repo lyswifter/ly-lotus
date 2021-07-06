@@ -298,6 +298,8 @@ func (m *Manager) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 		selector = newExistingSelector(m.index, sector.ID, storiface.FTUnsealed, false)
 	}
 
+	log.Infof("AddPiece-sche: %+v sz: %d", r, sz)
+
 	var out abi.PieceInfo
 	err = m.sched.Schedule(ctx, sector, sealtasks.TTAddPiece, selector, schedNop, func(ctx context.Context, w Worker) error {
 		p, err := m.waitSimpleCall(ctx)(w.AddPiece(ctx, sector, existingPieces, sz, r))

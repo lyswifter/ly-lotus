@@ -46,6 +46,9 @@ func (sb *Sealer) NewSector(ctx context.Context, sector storage.SectorRef) error
 }
 
 func (sb *Sealer) AddPiece(ctx context.Context, sector storage.SectorRef, existingPieceSizes []abi.UnpaddedPieceSize, pieceSize abi.UnpaddedPieceSize, file storage.Data) (abi.PieceInfo, error) {
+	log.Infow("AddPiece-cgo", "sector", sector, "pieceSize", pieceSize, "existingPieceSizes", existingPieceSizes)
+	log.Infof("AddPiece-cgo: %+v", file)
+
 	// TODO: allow tuning those:
 	chunk := abi.PaddedPieceSize(4 << 20)
 	parallel := runtime.NumCPU()
@@ -113,6 +116,15 @@ func (sb *Sealer) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 
 	pr := io.TeeReader(io.LimitReader(file, int64(pieceSize)), pw)
 
+	bufinner := make([]byte, chunk.Unpadded())
+	m, err := pr.Read(bufinner)
+	if err != nil {
+		log.Infof("pr: %+v pw: %+v m: %d err: %v", pr, pw, m, err)
+		return abi.PieceInfo{}, err
+	}
+
+	log.Infof("pr: %+v pw: %+v", pr, pw)
+
 	throttle := make(chan []byte, parallel)
 	piecePromises := make([]func() (abi.PieceInfo, error), 0)
 
@@ -135,11 +147,15 @@ func (sb *Sealer) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 			rbuf = rbuf[n:]
 			read += n
 
+			log.Infof("read: %d rbuf: %v rbuf last: %v n: %d", read, rbuf[:200], rbuf[len(rbuf)-200:], n)
+
 			if err == io.EOF {
+				log.Infof("read end: %d", len(buf))
 				break
 			}
 		}
 		if read == 0 {
+			log.Infof("read break: %d", read)
 			break
 		}
 
@@ -196,6 +212,8 @@ func (sb *Sealer) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 		return piecePromises[0]()
 	}
 
+	log.Infof("piecePromises len: %d", len(piecePromises))
+
 	var payloadRoundedBytes abi.PaddedPieceSize
 	pieceCids := make([]abi.PieceInfo, len(piecePromises))
 	for i, promise := range piecePromises {
@@ -203,6 +221,8 @@ func (sb *Sealer) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 		if err != nil {
 			return abi.PieceInfo{}, err
 		}
+
+		log.Infof("pinfo: %+v", pinfo)
 
 		pieceCids[i] = pinfo
 		payloadRoundedBytes += pinfo.Size
@@ -219,9 +239,9 @@ func (sb *Sealer) AddPiece(ctx context.Context, sector storage.SectorRef, existi
 	}
 
 	if payloadRoundedBytes < pieceSize.Padded() {
-		log.Infof("payloadRoundedBytes: %d pieceSize.Padded(): %d", payloadRoundedBytes, pieceSize.Padded())
 		paddedCid, err := commpffi.ZeroPadPieceCommitment(pieceCID, payloadRoundedBytes.Unpadded(), pieceSize)
 		if err != nil {
+			log.Infof("payloadRoundedBytes: %d pieceSize.Padded(): %d err: %s", payloadRoundedBytes, pieceSize.Padded(), err.Error())
 			return abi.PieceInfo{}, xerrors.Errorf("failed to pad data: %w", err)
 		}
 

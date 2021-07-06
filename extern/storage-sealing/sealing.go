@@ -13,6 +13,9 @@ import (
 	"golang.org/x/xerrors"
 
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-commp-utils/pieceio"
+	"github.com/filecoin-project/go-commp-utils/pieceio/cario"
+	"github.com/filecoin-project/go-multistore"
 	"github.com/filecoin-project/go-state-types/abi"
 	"github.com/filecoin-project/go-state-types/big"
 	"github.com/filecoin-project/go-state-types/crypto"
@@ -93,6 +96,10 @@ type Sealing struct {
 	verif   ffiwrapper.Verifier
 	pcp     PreCommitPolicy
 
+	MultiDstore *multistore.MultiStore
+	pio         pieceio.PieceIO
+	// fs          filestore.FileStore
+
 	inputLk        sync.Mutex
 	openSectors    map[abi.SectorID]*openSector
 	sectorTimers   map[abi.SectorID]*time.Timer
@@ -167,6 +174,16 @@ func New(mctx context.Context, api SealingAPI, fc config.MinerFeeConfig, events 
 	s.startupWait.Add(1)
 
 	s.sectors = statemachine.New(namespace.Wrap(ds, datastore.NewKey(SectorStorePrefix)), s, SectorInfo{})
+
+	mds, err := multistore.NewMultiDstore(ds)
+	if err != nil {
+		return s
+	}
+	s.MultiDstore = mds
+
+	carIO := cario.NewCarIO()
+	pio := pieceio.NewPieceIO(carIO, nil, s.MultiDstore)
+	s.pio = pio
 
 	return s
 }

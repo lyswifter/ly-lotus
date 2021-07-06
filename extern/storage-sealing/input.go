@@ -29,7 +29,7 @@ func (m *Sealing) handleWaitDeals(ctx statemachine.Context, sector SectorInfo) e
 		used += piece.Piece.Size.Unpadded()
 	}
 
-	log.Info("handleWaitDeals: %+v used: %d", sector, used)
+	log.Infof("handleWaitDeals: %+v used: %d", sector, used)
 
 	m.inputLk.Lock()
 
@@ -62,7 +62,6 @@ func (m *Sealing) handleWaitDeals(ctx statemachine.Context, sector SectorInfo) e
 				// todo check deal start deadline (configurable)
 				m.assignedPieces[sid] = append(m.assignedPieces[sid], cid)
 
-				log.Infof("maybeAccept sid: %+v assignedPieces len: %d", sid, len(m.assignedPieces))
 				return ctx.Send(SectorAddPiece{})
 			},
 		}
@@ -193,6 +192,8 @@ func (m *Sealing) handleAddPiece(ctx statemachine.Context, sector SectorInfo) er
 
 		offset += padLength.Unpadded()
 
+		log.Infof("pads: %+v", pads)
+
 		for _, p := range pads {
 			ppi, err := m.sealer.AddPiece(sectorstorage.WithPriority(ctx.Context(), DealSectorPriority),
 				m.minerSector(sector.SectorType, sector.SectorNumber),
@@ -210,6 +211,8 @@ func (m *Sealing) handleAddPiece(ctx statemachine.Context, sector SectorInfo) er
 				Piece: ppi,
 			})
 		}
+
+		log.Infof("AddPiece: size: %d data: %+v", deal.size, deal.data)
 
 		ppi, err := m.sealer.AddPiece(sectorstorage.WithPriority(ctx.Context(), DealSectorPriority),
 			m.minerSector(sector.SectorType, sector.SectorNumber),
@@ -395,6 +398,8 @@ func (m *Sealing) updateInput(ctx context.Context, sp abi.RegisteredSealProof) e
 			continue
 		}
 	}
+
+	log.Infof("m.openSectors: %+v", m.openSectors)
 
 	if len(toAssign) > 0 {
 		if err := m.tryCreateDealSector(ctx, sp); err != nil {

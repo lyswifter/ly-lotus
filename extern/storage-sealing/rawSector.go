@@ -18,6 +18,7 @@ func (m *Sealing) AssignPieceIntoAnyRawSectors(ctx context.Context, carfile stri
 	m.inputLk.Lock()
 
 	rdr, err := os.Open(carfile)
+	// rdr, err := os.OpenFile(carfile, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
 		return nil, err
 	}
@@ -38,11 +39,10 @@ func (m *Sealing) AssignPieceIntoAnyRawSectors(ctx context.Context, carfile stri
 		return nil, xerrors.Errorf("seek to start: %w", err)
 	}
 
-	pieceReader, pieceSize := padreader.New(rdr, uint64(stat.Size()))
+	log.Infof("uint64(stat.Size()): %d", uint64(stat.Size()))
+	log.Infof("paddsize: %d upaddsize: %d", abi.UnpaddedPieceSize(uint64(stat.Size())).Padded(), abi.UnpaddedPieceSize(uint64(stat.Size())))
 
-	if (padreader.PaddedSize(uint64(pieceSize))) != pieceSize {
-		return nil, xerrors.Errorf("cannot allocate unpadded piece")
-	}
+	pieceReader, pieceSize := padreader.New(rdr, uint64(stat.Size()))
 
 	sp, err := m.currentSealProof(ctx)
 	if err != nil {
@@ -62,7 +62,6 @@ func (m *Sealing) AssignPieceIntoAnyRawSectors(ctx context.Context, carfile stri
 	if err != nil {
 		return nil, err
 	}
-
 	log.Infof("Assigning piece for piecesize: %d pad-size: %d", pieceSize, pieceSize.Padded())
 
 	m.pendingPieces[commP] = &pendingPiece{
