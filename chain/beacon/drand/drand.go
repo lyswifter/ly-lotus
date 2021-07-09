@@ -141,6 +141,21 @@ func (db *DrandBeacon) Entry(ctx context.Context, round uint64) <-chan beacon.Re
 	}
 
 	go func() {
+		result := db.client.Watch(ctx)
+		go func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case r := <-result:
+					db.cacheValue(types.BeaconEntry{Round: r.Round(), Data: r.Signature()})
+					log.Infof("finished watch and cache beacon: %d rand: %v", r.Round(), r.Signature()[:5])
+				}
+			}
+		}()
+	}()
+
+	go func() {
 		start := build.Clock.Now()
 		log.Infow("start fetching randomness", "round", round)
 		resp, err := db.client.Get(ctx, round)
