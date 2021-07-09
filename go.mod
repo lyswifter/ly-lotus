@@ -20,7 +20,7 @@ require (
 	github.com/dgraph-io/badger/v2 v2.2007.2
 	github.com/docker/go-units v0.4.0
 	github.com/drand/drand v1.2.1
-	github.com/drand/kyber v1.1.4
+	github.com/drand/kyber v1.1.6
 	github.com/dustin/go-humanize v1.0.0
 	github.com/elastic/go-sysinfo v1.3.0
 	github.com/elastic/gosigar v0.12.0
@@ -174,3 +174,5 @@ replace github.com/filecoin-project/test-vectors => ./extern/test-vectors
 replace github.com/filecoin-project/go-state-types => github.com/lyswifter/go-state-types v0.2.0
 
 replace github.com/filecoin-project/specs-actors/v4 => github.com/lyswifter/specs-actors/v4 v4.0.6
+
+replace github.com/drand/drand => github.com/lyswifter/drand v1.2.8
