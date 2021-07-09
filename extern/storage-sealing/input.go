@@ -42,7 +42,6 @@ func (m *Sealing) handleWaitDeals(ctx statemachine.Context, sector SectorInfo) e
 	if len(m.assignedPieces[sid]) > 0 {
 		m.inputLk.Unlock()
 		// got assigned more pieces in the AddPiece state
-		log.Info("assign enough pieces")
 		return ctx.Send(SectorAddPiece{})
 	}
 
@@ -192,8 +191,6 @@ func (m *Sealing) handleAddPiece(ctx statemachine.Context, sector SectorInfo) er
 
 		offset += padLength.Unpadded()
 
-		log.Infof("pads: %+v", pads)
-
 		for _, p := range pads {
 			ppi, err := m.sealer.AddPiece(sectorstorage.WithPriority(ctx.Context(), DealSectorPriority),
 				m.minerSector(sector.SectorType, sector.SectorNumber),
@@ -212,8 +209,6 @@ func (m *Sealing) handleAddPiece(ctx statemachine.Context, sector SectorInfo) er
 			})
 		}
 
-		log.Infof("AddPiece: size: %d data: %+v", deal.size, deal.data)
-
 		ppi, err := m.sealer.AddPiece(sectorstorage.WithPriority(ctx.Context(), DealSectorPriority),
 			m.minerSector(sector.SectorType, sector.SectorNumber),
 			pieceSizes,
@@ -224,8 +219,6 @@ func (m *Sealing) handleAddPiece(ctx statemachine.Context, sector SectorInfo) er
 			deal.accepted(sector.SectorNumber, offset, err)
 			return ctx.Send(SectorAddPieceFailed{err})
 		}
-
-		log.Infow("deal added to a sector", "deal", deal.deal.DealID, "sector", sector.SectorNumber, "piece", ppi.PieceCID)
 
 		deal.accepted(sector.SectorNumber, offset, nil)
 
@@ -339,8 +332,6 @@ func (m *Sealing) updateInput(ctx context.Context, sp abi.RegisteredSealProof) e
 		for id, sector := range m.openSectors {
 			avail := abi.PaddedPieceSize(ssize).Unpadded() - sector.used
 
-			log.Infof("piece.size: %d avail: %d sector.used: %d", piece.size, avail, sector.used)
-
 			if piece.size <= avail { // (note: if we have enough space for the piece, we also have enough space for inter-piece padding)
 				matches = append(matches, match{
 					sector: id,
@@ -363,8 +354,6 @@ func (m *Sealing) updateInput(ctx context.Context, sp abi.RegisteredSealProof) e
 
 		return matches[i].sector.Number < matches[j].sector.Number // prefer older sectors
 	})
-
-	log.Infof("matches: %+v", matches)
 
 	var assigned int
 	for _, mt := range matches {
@@ -398,8 +387,6 @@ func (m *Sealing) updateInput(ctx context.Context, sp abi.RegisteredSealProof) e
 			continue
 		}
 	}
-
-	log.Infof("m.openSectors: %+v", m.openSectors)
 
 	if len(toAssign) > 0 {
 		if err := m.tryCreateDealSector(ctx, sp); err != nil {

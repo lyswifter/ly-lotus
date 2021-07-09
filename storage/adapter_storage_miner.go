@@ -17,6 +17,7 @@ import (
 
 	market2 "github.com/filecoin-project/specs-actors/v2/actors/builtin/market"
 	market5 "github.com/filecoin-project/specs-actors/v5/actors/builtin/market"
+	market6 "github.com/filecoin-project/specs-actors/v6/actors/builtin/market"
 
 	"github.com/filecoin-project/lotus/api"
 	"github.com/filecoin-project/lotus/blockstore"
@@ -141,7 +142,7 @@ func (s SealingAPIAdapter) StateSearchMsg(ctx context.Context, c cid.Cid) (*seal
 	}, nil
 }
 
-func (s SealingAPIAdapter) StateComputeDataCommitment(ctx context.Context, maddr address.Address, sectorType abi.RegisteredSealProof, deals []abi.DealID, tok sealing.TipSetToken) (cid.Cid, error) {
+func (s SealingAPIAdapter) StateComputeDataCommitment(ctx context.Context, maddr address.Address, sectorType abi.RegisteredSealProof, deals []abi.DealID, pieces []*market6.RawPiece, tok sealing.TipSetToken) (cid.Cid, error) {
 	tsk, err := types.TipSetKeyFromBytes(tok)
 	if err != nil {
 		return cid.Undef, xerrors.Errorf("failed to unmarshal TipSetToken to TipSetKey: %w", err)
@@ -158,11 +159,21 @@ func (s SealingAPIAdapter) StateComputeDataCommitment(ctx context.Context, maddr
 			DealIDs:    deals,
 			SectorType: sectorType,
 		})
-	} else {
+	} else if nv < network.Version14 {
 		ccparams, err = actors.SerializeParams(&market5.ComputeDataCommitmentParams{
 			Inputs: []*market5.SectorDataSpec{
 				{
 					DealIDs:    deals,
+					SectorType: sectorType,
+				},
+			},
+		})
+	} else {
+		ccparams, err = actors.SerializeParams(&market6.ComputeDataCommitmentParams{
+			Inputs: []*market6.SectorDataSpec{
+				{
+					DealIDs:    deals,
+					Pieces:     pieces,
 					SectorType: sectorType,
 				},
 			},

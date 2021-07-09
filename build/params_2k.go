@@ -41,6 +41,8 @@ var UpgradeTurboHeight = abi.ChainEpoch(-14)
 
 var UpgradeHyperdriveHeight = abi.ChainEpoch(-15)
 
+var UpgradeUsefuldriveHeight = abi.ChainEpoch(30)
+
 var DrandSchedule = map[abi.ChainEpoch]DrandEnum{
 	0: DrandMainnet,
 }
@@ -81,6 +83,7 @@ func init() {
 	UpgradeNorwegianHeight = getUpgradeHeight("LOTUS_NORWEGIAN_HEIGHT", UpgradeNorwegianHeight)
 	UpgradeTurboHeight = getUpgradeHeight("LOTUS_ACTORSV4_HEIGHT", UpgradeTurboHeight)
 	UpgradeHyperdriveHeight = getUpgradeHeight("LOTUS_HYPERDRIVE_HEIGHT", UpgradeHyperdriveHeight)
+	UpgradeUsefuldriveHeight = getUpgradeHeight("LOTUS_USEFULDEIVE_HEIGHT", UpgradeUsefuldriveHeight)
 
 	BuildType |= Build2k
 }

@@ -49,6 +49,7 @@ require (
 	github.com/filecoin-project/specs-actors/v3 v3.1.1
 	github.com/filecoin-project/specs-actors/v4 v4.0.1
 	github.com/filecoin-project/specs-actors/v5 v5.0.1
+	github.com/filecoin-project/specs-actors/v6 v6.0.0
 	github.com/filecoin-project/specs-storage v0.1.1-0.20201105051918-5188d9774506
 	github.com/filecoin-project/test-vectors/schema v0.0.5
 	github.com/gbrlsnchs/jwt/v3 v3.0.0-beta.1
@@ -171,9 +172,9 @@ replace github.com/filecoin-project/filecoin-ffi => ./extern/filecoin-ffi
 
 replace github.com/filecoin-project/test-vectors => ./extern/test-vectors
 
-replace github.com/filecoin-project/go-state-types => github.com/lyswifter/go-state-types v0.2.0
+replace github.com/filecoin-project/go-state-types => github.com/lyswifter/go-state-types v0.3.0
 
-replace github.com/filecoin-project/specs-actors/v4 => github.com/lyswifter/specs-actors/v4 v4.0.6
+replace github.com/filecoin-project/specs-actors/v6 => github.com/lyswifter/specs-actors/v6 v6.0.2
 
 replace github.com/filecoin-project/go-commp-utils => ./extern/go_commp_utils
 

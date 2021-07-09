@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"context"
 
+	"github.com/filecoin-project/go-commp-utils/zerocomm"
 	"github.com/filecoin-project/lotus/chain/actors/policy"
+	"github.com/ipfs/go-cid"
 
 	proof2 "github.com/filecoin-project/specs-actors/v2/actors/runtime/proof"
+	"github.com/filecoin-project/specs-actors/v6/actors/builtin/market"
 
 	"golang.org/x/xerrors"
 
@@ -43,14 +46,13 @@ func checkPieces(ctx context.Context, maddr address.Address, si SectorInfo, api 
 	for i, p := range si.Pieces {
 		// if no deal is associated with the piece, ensure that we added it as
 		// filler (i.e. ensure that it has a zero PieceCID)
-		if p.DealInfo == nil {
-			// exp := zerocomm.ZeroPieceCommitment(p.Piece.Size.Unpadded())
-			// if !p.Piece.PieceCID.Equals(exp) {
-			// 	return &ErrInvalidPiece{xerrors.Errorf("sector %d piece %d had non-zero PieceCID %+v", si.SectorNumber, i, p.Piece.PieceCID)}
-			// }
-
-			log.Infof("pieceinfo has no dealinfo inside: %+v", p)
-
+		if p.DealInfo.PublishCid == nil && p.Piece.PieceCID == cid.Undef {
+			exp := zerocomm.ZeroPieceCommitment(p.Piece.Size.Unpadded())
+			if !p.Piece.PieceCID.Equals(exp) {
+				return &ErrInvalidPiece{xerrors.Errorf("sector %d piece %d had non-zero PieceCID %+v", si.SectorNumber, i, p.Piece.PieceCID)}
+			}
+		} else {
+			log.Infof("raw piece: %v has no deal inside, ignore", p.Piece.PieceCID)
 			continue
 		}
 
@@ -86,7 +88,15 @@ func checkPrecommit(ctx context.Context, maddr address.Address, si SectorInfo, t
 		return err
 	}
 
-	commD, err := api.StateComputeDataCommitment(ctx, maddr, si.SectorType, si.dealIDs(), tok)
+	var pieces []*market.RawPiece
+	for _, p := range si.Pieces {
+		pieces = append(pieces, &market.RawPiece{
+			Size:     p.Piece.Size,
+			PieceCID: p.Piece.PieceCID,
+		})
+	}
+
+	commD, err := api.StateComputeDataCommitment(ctx, maddr, si.SectorType, si.dealIDs(), pieces, tok)
 	if err != nil {
 		return &ErrApi{xerrors.Errorf("calling StateComputeDataCommitment: %w", err)}
 	}

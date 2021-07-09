@@ -66,6 +66,8 @@ const UpgradeTurboHeight = 712320
 // 2021-06-30T22:00:00Z
 var UpgradeHyperdriveHeight = abi.ChainEpoch(892800)
 
+var UpgradeUsefuldriveHeight = abi.ChainEpoch(999999999)
+
 func init() {
 	if os.Getenv("LOTUS_USE_TEST_ADDRESSES") != "1" {
 		SetAddressNetwork(address.Mainnet)
